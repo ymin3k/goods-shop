@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>관리자 - 전체 결제내역</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <h1 class="page-title">전체 결제내역 (관리자)</h1>
+    <div id="content"><p class="empty">불러오는 중...</p></div>
+  </main>
+
+  <script type="module">
+    import { supabase, renderHeader, requireLogin, isAdmin, ADMIN_EMAIL, escapeHtml, formatDate } from './js/common.js';
+    import { formatPrice } from './js/products.js';
+
+    renderHeader('admin.html');
+
+    const content = document.getElementById('content');
+
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      // 관리자가 아니면 여기서 막습니다.
+      // (화면뿐 아니라 데이터베이스 규칙(RLS)에서도 막고 있어서 우회할 수 없습니다.)
+      if (!isAdmin(user)) {
+        content.innerHTML = `
+          <div class="empty">
+            <p>권한이 없습니다.</p>
+            <p class="section-desc">${escapeHtml(ADMIN_EMAIL)} 계정으로 로그인해야 볼 수 있습니다.</p>
+            <div class="stack"><a class="btn btn-line" href="index.html">상품 목록으로</a></div>
+          </div>`;
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('payments')
+        .select('order_id, user_email, product_name, amount, status, created_at')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        content.innerHTML = `<p class="msg error">결제내역을 불러오지 못했습니다: ${escapeHtml(error.message)}</p>`;
+        return;
+      }
+
+      const total = data.reduce((sum, o) => sum + o.amount, 0);
+      const buyers = new Set(data.map((o) => o.user_email)).size;
+
+      const summary = `
+        <div class="summary">
+          <div><p class="k">결제 건수</p><p class="v">${data.length}건</p></div>
+          <div><p class="k">총 결제금액</p><p class="v">${formatPrice(total)}</p></div>
+          <div><p class="k">구매한 사람</p><p class="v">${buyers}명</p></div>
+        </div>`;
+
+      if (!data.length) {
+        content.innerHTML = summary + '<div class="empty"><p>아직 결제 내역이 없어요.</p></div>';
+        return;
+      }
+
+      content.innerHTML = summary + '<div class="order-list">' + data.map((o) => `
+        <div class="order-card">
+          <div class="top">
+            <span class="pname">${escapeHtml(o.product_name)}</span>
+            <span class="amount">${formatPrice(o.amount)}</span>
+          </div>
+          <p class="buyer">${escapeHtml(o.user_email)}</p>
+          <p class="meta">${formatDate(o.created_at)} · 주문번호 ${escapeHtml(o.order_id)}</p>
+        </div>
+      `).join('') + '</div>';
+    })();
+  </script>
+</body>
+</html>
