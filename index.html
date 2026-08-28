@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>굿즈샵</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <h1 class="page-title">상품 목록</h1>
+    <p class="section-desc">마음에 드는 상품을 눌러 결제해 보세요. (토스페이먼츠 테스트 모드 - 실제로 돈이 빠져나가지 않습니다)</p>
+    <div class="product-grid" id="grid"></div>
+  </main>
+
+  <script type="module">
+    import { renderHeader, IMG_FALLBACK, escapeHtml } from './js/common.js';
+    import { PRODUCTS, formatPrice } from './js/products.js';
+
+    renderHeader('index.html');
+
+    document.getElementById('grid').innerHTML = PRODUCTS.map((p) => `
+      <a class="product-card" href="product.html?id=${p.id}">
+        <img class="thumb" src="${p.image}" alt="${escapeHtml(p.name)}" loading="lazy" onerror="${IMG_FALLBACK}">
+        <p class="name">${escapeHtml(p.name)}</p>
+        <p class="price">${formatPrice(p.price)}</p>
+      </a>
+    `).join('');
+  </script>
+</body>
+</html>
