@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>결제 완료 - 굿즈샵</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <div class="center" id="content">
+      <p class="empty">결제를 확인하고 있습니다...<br>잠시만 기다려 주세요.</p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { supabase, renderHeader, escapeHtml } from './js/common.js';
+    import { SUPABASE_URL, SUPABASE_ANON_KEY } from './js/config.js';
+    import { formatPrice } from './js/products.js';
+
+    renderHeader();
+
+    const content = document.getElementById('content');
+    const q = new URLSearchParams(location.search);
+    const paymentKey = q.get('paymentKey');
+    const orderId = q.get('orderId');
+    const amount = Number(q.get('amount'));
+
+    // product.html 에서 저장해 둔 상품 번호를 꺼냅니다.
+    let productId = null;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('pending_order') || '{}');
+      if (saved.orderId === orderId) productId = saved.productId;
+    } catch (e) { /* 무시 */ }
+
+    function showError(text) {
+      content.innerHTML = `
+        <p class="result-icon">⚠️</p>
+        <h1 class="page-title">결제를 완료하지 못했습니다</h1>
+        <p class="msg error">${escapeHtml(text)}</p>
+        <div class="stack">
+          <a class="btn" href="index.html">상품 목록으로</a>
+        </div>`;
+    }
+
+    (async () => {
+      if (!paymentKey || !orderId || !amount) {
+        showError('결제 정보가 올바르지 않습니다. 상품 목록에서 다시 시도해 주세요.');
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        showError('로그인이 풀렸습니다. 다시 로그인한 뒤 내 결제내역에서 확인해 주세요.');
+        return;
+      }
+
+      try {
+        // 결제 승인은 반드시 서버(Edge Function)에서 합니다. (비밀키 보호 + 금액 위조 방지)
+        const res = await fetch(SUPABASE_URL + '/functions/v1/confirm-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + data.session.access_token,
+            'apikey': SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ paymentKey, orderId, amount, productId }),
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.message || '결제 승인에 실패했습니다.');
+
+        sessionStorage.removeItem('pending_order');
+
+        content.innerHTML = `
+          <p class="result-icon">✅</p>
+          <h1 class="page-title">결제가 완료되었습니다</h1>
+          <div class="order-card" style="text-align:left; margin-top:16px">
+            <div class="top">
+              <span class="pname">${escapeHtml(result.productName)}</span>
+              <span class="amount">${formatPrice(result.amount)}</span>
+            </div>
+            <p class="meta">주문번호 ${escapeHtml(result.orderId)}</p>
+          </div>
+          <div class="stack">
+            <a class="btn" href="orders.html">내 결제내역 보기</a>
+            <a class="btn btn-gray" href="index.html">상품 더 보기</a>
+          </div>`;
+      } catch (err) {
+        showError(err.message || '알 수 없는 오류가 발생했습니다.');
+      }
+    })();
+  </script>
+</body>
+</html>
