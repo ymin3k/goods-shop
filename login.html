@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로그인 / 회원가입 - 굿즈샵</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <div class="auth-box">
+      <div class="tabs">
+        <button class="tab is-active" id="tab-login" type="button">로그인</button>
+        <button class="tab" id="tab-signup" type="button">회원가입</button>
+      </div>
+
+      <form id="form">
+        <label for="email">이메일</label>
+        <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+
+        <label for="password">비밀번호</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="6자 이상" required minlength="6">
+
+        <p class="msg" id="msg"></p>
+
+        <button class="btn" id="submit" type="submit">로그인</button>
+      </form>
+    </div>
+  </main>
+
+  <script type="module">
+    import { supabase, renderHeader, getUser } from './js/common.js';
+
+    renderHeader('login.html');
+
+    // 이미 로그인한 상태면 상품 목록으로 보냄
+    getUser().then((user) => { if (user) location.replace('index.html'); });
+
+    let mode = 'login'; // 'login' 또는 'signup'
+    const tabLogin = document.getElementById('tab-login');
+    const tabSignup = document.getElementById('tab-signup');
+    const submit = document.getElementById('submit');
+    const msg = document.getElementById('msg');
+    const pw = document.getElementById('password');
+
+    function setMode(next) {
+      mode = next;
+      tabLogin.classList.toggle('is-active', mode === 'login');
+      tabSignup.classList.toggle('is-active', mode === 'signup');
+      submit.textContent = mode === 'login' ? '로그인' : '회원가입';
+      pw.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+      msg.textContent = '';
+      msg.className = 'msg';
+    }
+    tabLogin.addEventListener('click', () => setMode('login'));
+    tabSignup.addEventListener('click', () => setMode('signup'));
+
+    // 영어 에러 메시지를 쉬운 한글로 바꿔줍니다.
+    function toKorean(text) {
+      if (/Invalid login credentials/i.test(text)) return '이메일 또는 비밀번호가 맞지 않습니다.';
+      if (/already registered|already been registered/i.test(text)) return '이미 가입된 이메일입니다. 로그인 탭을 이용해 주세요.';
+      if (/at least 6 characters|Password should be/i.test(text)) return '비밀번호는 6자 이상으로 입력해 주세요.';
+      if (/valid email|invalid format/i.test(text)) return '이메일 형식이 올바르지 않습니다.';
+      if (/Email not confirmed/i.test(text)) return '이메일 인증이 켜져 있습니다. Supabase 설정에서 Confirm email 을 꺼주세요.';
+      if (/rate limit|too many/i.test(text)) return '요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.';
+      if (/Failed to fetch|NetworkError/i.test(text)) return '서버에 연결하지 못했습니다. js/config.js 의 Supabase 주소와 키를 확인해 주세요.';
+      return text;
+    }
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = pw.value;
+
+      submit.disabled = true;
+      submit.textContent = '처리 중...';
+      msg.className = 'msg';
+      msg.textContent = '';
+
+      try {
+        const { data, error } =
+          mode === 'login'
+            ? await supabase.auth.signInWithPassword({ email, password })
+            : await supabase.auth.signUp({ email, password });
+
+        if (error) throw error;
+
+        // 이메일 인증이 켜져 있으면 회원가입 직후 세션이 없습니다.
+        if (!data.session) {
+          msg.className = 'msg error';
+          msg.textContent = '가입은 되었지만 바로 로그인되지 않았습니다. Supabase 설정에서 이메일 인증(Confirm email)을 꺼주세요.';
+          return;
+        }
+        location.replace('index.html');
+      } catch (err) {
+        msg.className = 'msg error';
+        msg.textContent = toKorean(err.message || '알 수 없는 오류가 발생했습니다.');
+      } finally {
+        submit.disabled = false;
+        submit.textContent = mode === 'login' ? '로그인' : '회원가입';
+      }
+    });
+  </script>
+</body>
+</html>
