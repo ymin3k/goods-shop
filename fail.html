@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>결제 실패 - 굿즈샵</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <div class="center">
+      <p class="result-icon">❌</p>
+      <h1 class="page-title">결제가 완료되지 않았습니다</h1>
+      <p class="msg error" id="reason"></p>
+      <div class="stack">
+        <a class="btn" href="index.html">상품 목록으로</a>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderHeader } from './js/common.js';
+
+    renderHeader();
+
+    const q = new URLSearchParams(location.search);
+    const code = q.get('code');
+    const message = q.get('message');
+
+    // 자주 나오는 실패 코드는 쉬운 말로 바꿔 보여줍니다.
+    const KNOWN = {
+      PAY_PROCESS_CANCELED: '결제를 취소하셨습니다.',
+      PAY_PROCESS_ABORTED: '결제 진행 중 문제가 생겨 중단되었습니다.',
+      REJECT_CARD_COMPANY: '카드사에서 결제를 거절했습니다.',
+      USER_CANCEL: '결제를 취소하셨습니다.',
+    };
+
+    document.getElementById('reason').textContent =
+      KNOWN[code] || message || '알 수 없는 이유로 결제가 중단되었습니다.';
+  </script>
+</body>
+</html>
