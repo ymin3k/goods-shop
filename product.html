@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>상품 상세 - 굿즈샵</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://js.tosspayments.com/v2/standard"></script>
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <div id="content"><p class="empty">불러오는 중...</p></div>
+  </main>
+
+  <script type="module">
+    import { renderHeader, getUser, IMG_FALLBACK, escapeHtml } from './js/common.js';
+    import { findProduct, formatPrice } from './js/products.js';
+    import { TOSS_CLIENT_KEY } from './js/config.js';
+
+    renderHeader('index.html');
+
+    const content = document.getElementById('content');
+    const id = new URLSearchParams(location.search).get('id');
+    const product = findProduct(id);
+
+    if (!product) {
+      content.innerHTML = `
+        <div class="empty">
+          <p>상품을 찾을 수 없습니다.</p>
+          <div class="stack"><a class="btn btn-line" href="index.html">상품 목록으로</a></div>
+        </div>`;
+    } else {
+      content.innerHTML = `
+        <div class="detail">
+          <img class="detail-img" src="${product.image}" alt="${escapeHtml(product.name)}" onerror="${IMG_FALLBACK}">
+          <div>
+            <h1 class="detail-name">${escapeHtml(product.name)}</h1>
+            <p class="detail-price">${formatPrice(product.price)}</p>
+            <p class="section-desc" style="margin-top:12px">토스페이먼츠 테스트 결제입니다. 실제로 청구되지 않습니다.</p>
+            <p class="msg" id="msg"></p>
+            <div class="buy-bar">
+              <button class="btn" id="pay">결제하기</button>
+            </div>
+          </div>
+        </div>`;
+
+      const msg = document.getElementById('msg');
+      const payBtn = document.getElementById('pay');
+
+      payBtn.addEventListener('click', async () => {
+        msg.className = 'msg';
+        msg.textContent = '';
+
+        // 로그인하지 않았으면 로그인 페이지로 보냅니다.
+        const user = await getUser();
+        if (!user) {
+          location.href = 'login.html';
+          return;
+        }
+
+        if (!TOSS_CLIENT_KEY.startsWith('test_ck_') || TOSS_CLIENT_KEY.includes('여기에')) {
+          msg.className = 'msg error';
+          msg.textContent = '토스 테스트 클라이언트 키가 아직 설정되지 않았습니다. js/config.js 의 TOSS_CLIENT_KEY 를 채워 주세요.';
+          return;
+        }
+
+        payBtn.disabled = true;
+        payBtn.textContent = '결제창 여는 중...';
+
+        // 주문번호는 매번 새로 만듭니다. (6자 이상 64자 이하)
+        const orderId = 'order_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+        // 결제 성공 후 success.html 에서 다시 쓰기 위해 잠시 저장해 둡니다.
+        sessionStorage.setItem('pending_order', JSON.stringify({ orderId, productId: product.id }));
+
+        try {
+          const tossPayments = TossPayments(TOSS_CLIENT_KEY);
+          const payment = tossPayments.payment({ customerKey: user.id });
+
+          await payment.requestPayment({
+            method: 'CARD',
+            amount: { currency: 'KRW', value: product.price },
+            orderId,
+            orderName: product.name.slice(0, 100),
+            customerEmail: user.email,
+            successUrl: new URL('success.html', location.href).href,
+            failUrl: new URL('fail.html', location.href).href,
+            card: { useEscrow: false, flowMode: 'DEFAULT', useCardPoint: false, useAppCardOnly: false },
+          });
+        } catch (err) {
+          // 사용자가 결제창을 닫은 경우도 여기로 옵니다.
+          msg.className = 'msg error';
+          msg.textContent =
+            err && err.code === 'USER_CANCEL'
+              ? '결제를 취소했습니다.'
+              : '결제창을 열지 못했습니다: ' + (err && err.message ? err.message : '알 수 없는 오류');
+        } finally {
+          payBtn.disabled = false;
+          payBtn.textContent = '결제하기';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
