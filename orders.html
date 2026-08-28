@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>내 결제내역 - 굿즈샵</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header"></header>
+
+  <main>
+    <h1 class="page-title">내 결제내역</h1>
+    <div id="list"><p class="empty">불러오는 중...</p></div>
+  </main>
+
+  <script type="module">
+    import { supabase, renderHeader, requireLogin, escapeHtml, formatDate } from './js/common.js';
+    import { formatPrice } from './js/products.js';
+
+    renderHeader('orders.html');
+
+    const list = document.getElementById('list');
+
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      // 데이터베이스 규칙(RLS) 덕분에 자동으로 "내 결제"만 내려옵니다.
+      const { data, error } = await supabase
+        .from('payments')
+        .select('order_id, product_name, amount, status, created_at')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        list.innerHTML = `<p class="msg error">결제내역을 불러오지 못했습니다: ${escapeHtml(error.message)}</p>`;
+        return;
+      }
+
+      if (!data.length) {
+        list.innerHTML = `
+          <div class="empty">
+            <p>아직 결제 내역이 없어요.</p>
+            <div class="stack"><a class="btn btn-line" href="index.html">상품 보러 가기</a></div>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = '<div class="order-list">' + data.map((o) => `
+        <div class="order-card">
+          <div class="top">
+            <span class="pname">${escapeHtml(o.product_name)}</span>
+            <span class="amount">${formatPrice(o.amount)}</span>
+          </div>
+          <p class="meta">${formatDate(o.created_at)} · 주문번호 ${escapeHtml(o.order_id)}</p>
+        </div>
+      `).join('') + '</div>';
+    })();
+  </script>
+</body>
+</html>
